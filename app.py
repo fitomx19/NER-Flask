@@ -11,12 +11,7 @@ import unidecode
 import jellyfish
 import re
 from flask import Flask
-import nltk
-from nltk.tokenize import word_tokenize
-from nltk.tag import pos_tag
-from nltk.chunk import conlltags2tree, tree2conlltags
-#nltk.download('maxent_ne_chunker')
-#nltk.download('words')
+
 # Crear la app Flask
 app = Flask(__name__)
 # Crear el objeto api
@@ -124,27 +119,22 @@ class NLPTest(Resource):
         return jsonify({"keyword":  keyword , "listado": diccionario_consulta_db , "longitud": len(lista)})
 class NLPVersionTwo(Resource):
 
-    def post(self):
-        
+    def post(self):     
         # cargar la libreria pequeña de spacy en español
         #eficiencia
         nlpspacy = es_core_news_md.load()
-        nlp = spacy.load("./newmodels/models/output/model-last")
+        nlp = spacy.load("./newmodels/models/output/model-best")
         nlp.add_pipe('sentencizer')
-        #precision
-        #nlp = spacy.load('es_dep_news_trf')
+       
         spacy.prefer_gpu() #siempre buscamos usar los nucleos de la gpu
     
         #declarar elementos y objetos quer vamos a necesitar de la api para poder utilizarlos en el nlp
         diccionario_consulta_db = {}
-        conteo = 0
         lista_de_id = {}
         request_json = request.get_json()
         keyword = request_json.get('keyword')
         lista = request_json.get('listado')
-       
-
-           
+                
         #agregar la informacion a un listado
         diccionario_consulta_db = {}
         for a in range(len(lista)):
@@ -152,56 +142,40 @@ class NLPVersionTwo(Resource):
             value = lista[a]["source"]
             diccionario_consulta_db.update({keys:(value)})
         #ciclo a las diferentes alertas
-        alertas = {}
         for x, y in diccionario_consulta_db.items():
             # Sin acentos el texto source
-            unaccented_string2 = unidecode.unidecode(y)
-          
-            
+            unaccented_string2 = unidecode.unidecode(y)       
             #crear una lista de los enunciados donde puede existir la palabra ( buscarla )
             keywordparsed = unidecode.unidecode(keyword).strip()
             if keywordparsed in unaccented_string2:
                 #dividir en enunciados y solo buscar en los textos que aparecen para no hacer tantas iteraciones
                 #def obtener_entidades(keywordparsed,unaccented_string):
-                sentences = [i for i in nlp(unaccented_string2).sents]
-                    #buscamos las entidades de los enunciados
-                    
-                for sent in sentences:                        
-                    for ent in sent.ents:                     
-                        entparsed =  unidecode.unidecode(ent.text)
-                            #print(keywordparsed) 
-                #PRIMERA BUSQUEDA
-                        if keywordparsed in entparsed:
-                            #si el texto tiene ya entidad definida arrojara un resultado alto
-                            similitud = jellyfish.jaro_distance(keyword, ent.text) 
-                            #0.89629629629629637 - 1 
-                            if(ent.label_ == "PER" or ent.label_ == "ORG" or ent.label_ == "MISC"):
-                                print("1.- Agregada por entrenamiento Spacy - Apolo")
-                                lista_de_id.update({f"{x}-{keywordparsed}": round(similitud,2)})       
-                            
-                #segundo_intento = [i for i in nlpspacy(unaccented_string2).sents]
+                             
+                      
+                for ent in unaccented_string2.ents:                     
+                    entparsed =  unidecode.unidecode(ent.text)
+                        
+                #PRIMERA BUSQUEDA BUSQUEDA SPACY
+                    if keywordparsed in entparsed:
+                        #si el texto tiene ya entidad definida arrojara un resultado de 1                        
+                        if(ent.label_ == "PER" or ent.label_ == "ORG" or ent.label_ == "MISC"):                            
+                            lista_de_id.update({f"{x}-{keywordparsed}": 0.75})       
+                                            
                 segundo_intento = nlpspacy(unaccented_string2)
                 for sent in segundo_intento.ents:
-                    #SEGUNDA BUSQUEDA
+                #SEGUNDA BUSQUEDA - BUSQUEDA SPACY/APOLO
                     if keywordparsed in sent.text:          
-                            #si el texto tiene ya entidad definida arrojara un resultado alto
-                        similitud = jellyfish.jaro_distance(keyword, sent.text) 
-                            #0.89629629629629637 - 1
                         key_to_lookup = f"{x}-{keywordparsed}"
                         if not key_to_lookup in lista_de_id:
-                            lista_de_id.update({key_to_lookup: round(similitud,2)})
-                            print("3.- Agregado por Spacy español clean") 
-                        
+                            lista_de_id.update({key_to_lookup: 1})
+                            
+                #TERCERA BUSQUEDA - BUSQUEDA NORMAL        
                 if(keywordparsed in unaccented_string2):
                     key_to_lookup = f"{x}-{keywordparsed}"
-                    if not key_to_lookup in lista_de_id:
-                        similitud = jellyfish.jaro_distance(keyword, sent.text)
-                        lista_de_id.update({key_to_lookup: round(similitud,2)})
-                        print("4.-Se encontro pero no se reconocio como entidad PER/ORG , se sugiere entrenar")             
+                    if not key_to_lookup in lista_de_id:       
+                        lista_de_id.update({key_to_lookup: 0.5})                                   
             else:
                   print("5.-No se encontro")    
-
-               
 
         salida = jsonify({'Keyword': keywordparsed ,  'Lista': lista_de_id  })
         return salida
