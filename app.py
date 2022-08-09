@@ -27,8 +27,8 @@ class NLP(Resource):
     def post(self):
         # cargar la libreria pequeña de spacy en español
         #eficiencia
-        nlpspacy = es_core_news_md.load()
-        nlp = spacy.load("../models/output/model-best")
+        nlpspacy = spacy.load('es_core_news_md')
+        nlp = spacy.load("../models/output/newModel/model-best")
         
         #precision
         #nlp = spacy.load('es_dep_news_trf')
@@ -82,19 +82,19 @@ class NLP(Resource):
                 #print(len(doc.ents))    
                 for ent in doc.ents: 
                     #print(len(ent))   
-                    keywordparsed  = keyword.lower().replace(" ", "").replace("\n","")      
+                    keywordparsed  = keyword.replace(" ", "").replace("\n","")      
                     re.sub(r'[^a-zA-Z]', '', keywordparsed)  
-                    entparsed =  ent.text.lower()    
+                    entparsed =  ent.text   
                     re.sub(r'[^a-zA-Z]', '', keywordparsed)  
                     if keywordparsed in entparsed:
-                        similitud = jellyfish.jaro_distance(keyword.lower(), ent.text.lower())
-                        print(f"{keyword.lower()} -> {ent.text.lower()} - {ent.label_} - {similitud}")                       
+                        similitud = jellyfish.jaro_distance(keyword, ent.text)
+                        print(f"{keyword} -> {ent.text} - {ent.label_} - {similitud}")                       
                         if ent.label_ == "ORG" or ent.label_ == "PER" or "MISC":                         
                                                                       
                         #lista_de_id.append(x)
                             rdstring = get_random_string(8)
                         #0.89629629629629637 
-                            lista_de_id.update({f"{rdstring}-{x} - {keyword.lower()} - {ent.text.lower()} - {ent.label_} ": round(similitud,2)})
+                            lista_de_id.update({f"{rdstring}-{x} - {keyword} - {ent.text} - {ent.label_} ": round(similitud,2)})
                             conteo += 1
                         #similitud_spacy =  keywordnlp.similarity(ent)
                         #lista_de_id_spacy.update({f"id-{rdstring}-{x} -  {keyword.lower()} - {ent.text.lower()} - {ent.label_} - spacy ": similitud_spacy})
@@ -125,10 +125,11 @@ class NLPTest(Resource):
 class NLPVersionTwo(Resource):
 
     def post(self):
+        
         # cargar la libreria pequeña de spacy en español
         #eficiencia
         nlpspacy = es_core_news_md.load()
-        nlp = spacy.load("./models/output/model-last")
+        nlp = spacy.load("./newmodels/models/output/model-last")
         nlp.add_pipe('sentencizer')
         #precision
         #nlp = spacy.load('es_dep_news_trf')
@@ -154,11 +155,11 @@ class NLPVersionTwo(Resource):
         alertas = {}
         for x, y in diccionario_consulta_db.items():
             # Sin acentos el texto source
-            unaccented_string2 = unidecode.unidecode(y).lower()
+            unaccented_string2 = unidecode.unidecode(y)
           
             
             #crear una lista de los enunciados donde puede existir la palabra ( buscarla )
-            keywordparsed = unidecode.unidecode(keyword).strip().lower()
+            keywordparsed = unidecode.unidecode(keyword).strip()
             if keywordparsed in unaccented_string2:
                 #dividir en enunciados y solo buscar en los textos que aparecen para no hacer tantas iteraciones
                 #def obtener_entidades(keywordparsed,unaccented_string):
@@ -167,37 +168,36 @@ class NLPVersionTwo(Resource):
                     
                 for sent in sentences:                        
                     for ent in sent.ents:                     
-                        entparsed =  unidecode.unidecode(ent.text).lower()  
+                        entparsed =  unidecode.unidecode(ent.text)
                             #print(keywordparsed) 
                 #PRIMERA BUSQUEDA
                         if keywordparsed in entparsed:
                             #si el texto tiene ya entidad definida arrojara un resultado alto
-                            similitud = jellyfish.jaro_distance(keyword.lower(), ent.text.lower()) 
+                            similitud = jellyfish.jaro_distance(keyword, ent.text) 
                             #0.89629629629629637 - 1 
                             if(ent.label_ == "PER" or ent.label_ == "ORG" or ent.label_ == "MISC"):
                                 print("1.- Agregada por entrenamiento Spacy - Apolo")
-                                lista_de_id.update({f"{x}-{keywordparsed.lower()}": round(similitud,2)})       
+                                lista_de_id.update({f"{x}-{keywordparsed}": round(similitud,2)})       
                             
-                segundo_intento = [i for i in nlpspacy(unaccented_string2).sents]
-                for ent in segundo_intento:
-                    for sent in ent.ents:
-                        entparsed =  unidecode.unidecode(sent.text).lower()
+                #segundo_intento = [i for i in nlpspacy(unaccented_string2).sents]
+                segundo_intento = nlpspacy(unaccented_string2)
+                for sent in segundo_intento.ents:
                     #SEGUNDA BUSQUEDA
-                        if keywordparsed in entparsed:          
+                    if keywordparsed in sent.text:          
                             #si el texto tiene ya entidad definida arrojara un resultado alto
-                            similitud = jellyfish.jaro_distance(keyword.lower(), ent.text.lower()) 
+                        similitud = jellyfish.jaro_distance(keyword, sent.text) 
                             #0.89629629629629637 - 1
-                            key_to_lookup = f"{x}-{keywordparsed.lower()}"
-                            if not key_to_lookup in lista_de_id:
-                                lista_de_id.update({key_to_lookup: round(similitud,2)})
-                                print("3.- Agregado por Spacy español clean") 
+                        key_to_lookup = f"{x}-{keywordparsed}"
+                        if not key_to_lookup in lista_de_id:
+                            lista_de_id.update({key_to_lookup: round(similitud,2)})
+                            print("3.- Agregado por Spacy español clean") 
                         
-                        else:
-                            key_to_lookup = f"{x}-{keywordparsed.lower()}"
-                            if not key_to_lookup in lista_de_id:
-                                similitud = jellyfish.jaro_distance(keyword.lower(), ent.text.lower())
-                                lista_de_id.update({key_to_lookup: round(similitud,2)})
-                                print("4.-Se encontro pero no se reconocio como entidad PER/ORG , se sugiere entrenar")             
+                if(keywordparsed in unaccented_string2):
+                    key_to_lookup = f"{x}-{keywordparsed}"
+                    if not key_to_lookup in lista_de_id:
+                        similitud = jellyfish.jaro_distance(keyword, sent.text)
+                        lista_de_id.update({key_to_lookup: round(similitud,2)})
+                        print("4.-Se encontro pero no se reconocio como entidad PER/ORG , se sugiere entrenar")             
             else:
                   print("5.-No se encontro")    
 
