@@ -10,7 +10,7 @@ import random,string
 import es_core_news_md
 from spacy.tokens import Span
 import unidecode
-import re
+from re import search
 from flask import Flask
 from spacy.matcher import PhraseMatcher
 import nltk
@@ -265,6 +265,31 @@ def metodoSpacy(keyword,lista):
         
         return lista_de_id
 
+def metodoSpacyFisicas(keyword,texto):
+    # cargar la libreria pequeña de spacy en español
+    #eficiencia
+    nlpspacy = es_core_news_md.load()
+
+    a = []
+    #ciclo a las diferentes alertas
+    # Sin acentos el texto source
+    unaccented_string2 = unidecode.unidecode(texto)  
+    keywordparsed = unidecode.unidecode(keyword).strip()
+    
+   
+            #dividir en enunciados y solo buscar en los textos que aparecen para no hacer tantas iteraciones
+            #def obtener_entidades(keywordparsed,unaccented_string):
+    apolo = nlpspacy(unaccented_string2)      
+    for ent in apolo.ents:                     
+        entparsed =  unidecode.unidecode(ent.text)               
+        #PRIMERA BUSQUEDA BUSQUEDA SPACY
+         
+                           
+        if(ent.label_ == "PER" or ent.label_ == "ORG" or ent.label_ == "MISC"):
+                a.append(ent.text)
+    return  a
+
+
 class NLPPersonasFisicas(Resource):
   
     def post(self):  
@@ -280,10 +305,8 @@ class NLPPersonasFisicas(Resource):
             if(len(trySplitKeywordparsed) == 1):
                 #este es un nombre,apellido simple
                 metodoSpacy(keyword,lista)
-
                 valorA = trySplitKeywordparsed[0]
-                #a = metodoSpacy(valorA,lista)
-    
+                #a = metodoSpacy(valorA,lista) 
                 nombres =  [valorA] 
                 salida = jsonify({'Keyword': keywordparsed, 'Lista': nombres})
                 return salida
@@ -375,14 +398,16 @@ def get_human_names(text):
 
 class PersonasFisicasEndpoint(Resource):
     def post(self):  
+            #Obtenemos la informacion necesaria
             request_json = request.get_json()   
             keyword = request_json.get('keyword')
+            keywordparsed = unidecode.unidecode(keyword).strip()
             lista = request_json.get('listado')
-
-            diccionario_consulta_db = {}
-            lista_de_id = []
+            diccionario_consulta_db = {}         
+            diccionario_salida = {}
+            lista_salida = []
         
-            #agregar la informacion a un listado
+            #agregar la informacion a un diccionario
             diccionario_consulta_db = {}
             for a in range(len(lista)):
                 keys = lista[a]["ConsolaSubId"]
@@ -390,71 +415,176 @@ class PersonasFisicasEndpoint(Resource):
                 diccionario_consulta_db.update({keys:(value)})
                 #ciclo a las diferentes alertas
            
+            #iteramos el diccionario en busqueda de nombres           
             for x, y in diccionario_consulta_db.items():
-
+                lista_de_id = []
                 unaccented_string2 = unidecode.unidecode(y)  
                 names = get_human_names(unaccented_string2)
+                namesapolo = metodoSpacyFisicas(keyword,unaccented_string2)
                 listado_extra = []
                 for name in names: 
                     last_first =  HumanName(name).first + ' ' + HumanName(name).last
                     listado_extra.append(last_first)
+                for name in namesapolo: 
+                    listado_extra.append(name)
                 print(listado_extra)
 
-                keywordparsed = unidecode.unidecode(keyword).strip()
+                #procesamos la keyword
+               
                 trySplitKeywordparsed = keywordparsed.split(' ')
                 print(keywordparsed)
                 if(len(trySplitKeywordparsed) == 1):
+
                 #este es un nombre,apellido simple
                     valorA = trySplitKeywordparsed[0]
-                    #a = metodoSpacy(valorA,lista)
-                    nombres =  [valorA]
-                    for test in listado_extra:
-                        str_match1 = ""
-                        if test in nombres:
-                            str_match1 = keywordparsed
-                        
 
-                    nombres =  [str_match1]
-                    lista_de_id.append(nombres)  
+                    #iteramos todos nombres encontrados en busqueda del substring dentro del texto
+                    for test in listado_extra:                        
+                        if search(valorA, test):
+                            str_match1 = keywordparsed
+                            nombres =  [str_match1]
+                            if(nombres != None):
+                                lista_de_id.append(nombres)
+                    for iden in range(len(lista_de_id)):
+                    #agregar la informacion a un listado
+                        keys_salida = x
+                        value_salida = lista_de_id[iden]
+                        diccionario_salida.update({keys_salida:(value_salida)})
+                        lista_salida.append(f"ID-{keys_salida} Nombre encontrado {value_salida} -> keyword {keywordparsed}")     
+
+                      
 
 
                 if(len(trySplitKeywordparsed) == 2):
                     #este es un nombre con apellido o dos nombres
                     #dividir uno y dos
-                    print("here")
+                   
                     valorA = trySplitKeywordparsed[0]
                     valorB = trySplitKeywordparsed[1]
 
                     posibilidad1 = valorA+ " " +valorB
                     posibilidad2 = valorB+ " " +valorA
 
-                    #a = metodoSpacy(posibilidad1,lista)
-                    #b = metodoSpacy(posibilidad2,lista)
+                    for test in listado_extra:                       
+                        if search(posibilidad1, test):
+                            str_match1 = posibilidad1
+                            nombres =  [str_match1]
+                            if(nombres != None):
+                                lista_de_id.append(nombres)
+                            
+                        elif search(posibilidad2, test):
+                            str_match2 = posibilidad2
+                            nombres =  [str_match2]
+                            if(nombres != None):
+                                lista_de_id.append(nombres)
+                    for iden in range(len(lista_de_id)):
+                    #agregar la informacion a un listado
+                        keys_salida = x
+                        value_salida = lista_de_id[iden]
+                        diccionario_salida.update({keys_salida:(value_salida)})
+                        lista_salida.append(f"ID-{keys_salida} Nombre encontrado {value_salida} -> keyword {keywordparsed}")     
 
-                    print("posibilidad 1 " + posibilidad1 )
-                    print("posibilidad 2 " + posibilidad2 )
+                
+                if(len(trySplitKeywordparsed) == 3):
+                    valorA = trySplitKeywordparsed[0]
+                    valorB = trySplitKeywordparsed[1]
+                    valorC = trySplitKeywordparsed[2]
 
-                    str_match1 = ""
-                    str_match2 = ""
+                    posibilidad1 = valorA+ " " + valorB + " " + valorC
+                    posibilidad2 = valorA+ " " + valorC + " " + valorB
+                    posibilidad3 = valorC+ " " + valorA + " " + valorB
 
-                    for test in listado_extra:
-                       
-                        if test in posibilidad1:
-                            str_match1 = keywordparsed
-                            nombres =  [str_match1, str_match2]
-                            lista_de_id.append(nombres)
-                            print(lista_de_id) 
-                        elif test in posibilidad2:
-                            str_match2 = keywordparsed
-                            nombres =  [str_match1, str_match2]
-                            lista_de_id.append(nombres)
-                            print(lista_de_id) 
+                    for test in listado_extra:                       
+                        if search(posibilidad1, test):
+                            str_match1 = posibilidad1
+                            nombres =  [str_match1]
+                            if(nombres != None):
+                                lista_de_id.append(nombres)
+                            
+                        elif search(posibilidad2, test):
+                            str_match2 = posibilidad2
+                            nombres =  [str_match2]
+                            if(nombres != None):
+                                lista_de_id.append(nombres)
+                        elif search(posibilidad3, test):
+                            str_match2 = posibilidad3
+                            nombres =  [str_match2]
+                            if(nombres != None):
+                                lista_de_id.append(nombres)
+                    for iden in range(len(lista_de_id)):
+                    #agregar la informacion a un listado
+                        keys_salida = x
+                        value_salida = lista_de_id[iden]
+                        diccionario_salida.update({keys_salida:(value_salida)})
+                        lista_salida.append(f"ID-{keys_salida} Nombre encontrado {value_salida} -> keyword {keywordparsed}")     
 
-                    
+
                     #salida = jsonify({ 'ConsolaSubId' : x  , 'Keyword': keywordparsed, 'Lista': nombres})
-                    
-            return lista_de_id
+                if(len(trySplitKeywordparsed) == 4):
+                #este es un nombre completo con dos nombres y dos apellidos
+                    valorA = trySplitKeywordparsed[0]
+                    valorB = trySplitKeywordparsed[1]
+                    valorC = trySplitKeywordparsed[2]
+                    valorD = trySplitKeywordparsed[3]
 
+                    posibilidad1 = valorA+ " " +valorB + " " + valorC + " " + valorD
+                    posibilidad2 = valorA+ " " +valorC + " " + valorB + " " + valorD
+                    posibilidad3 = valorA+ " " +valorC + " " + valorD + " " + valorB
+                    posibilidad4 = valorB+ " " +valorA + " " + valorC + " " + valorD
+                    posibilidad5 = valorB+ " " +valorA + " " + valorD + " " + valorC
+                    posibilidad6 = valorD+ " " +valorA + " " + valorB + " " + valorC
+
+                    #DE LA TORRE MICHEL
+                    #MICHEL DE LA TORRE
+                    #3 0 1 2
+
+
+                    for test in listado_extra:                       
+                        if search(posibilidad1, test):
+                            str_match1 = posibilidad1
+                            nombres =  [str_match1]
+                            if(nombres != None):
+                                lista_de_id.append(nombres)
+                            
+                        elif search(posibilidad2, test):
+                            str_match2 = posibilidad2
+                            nombres =  [str_match2]
+                            if(nombres != None):
+                                lista_de_id.append(nombres)
+                        elif search(posibilidad3, test):
+                            str_match2 = posibilidad3
+                            nombres =  [str_match2]
+                            if(nombres != None):
+                                lista_de_id.append(nombres)
+                        elif search(posibilidad4, test):
+                            str_match2 = posibilidad4
+                            nombres =  [str_match2]
+                            if(nombres != None):
+                                lista_de_id.append(nombres)
+                        elif search(posibilidad5, test):
+                            str_match2 = posibilidad5
+                            nombres =  [str_match2]
+                            if(nombres != None):
+                                lista_de_id.append(nombres)
+                        elif search(posibilidad6, test):
+                            str_match2 = posibilidad6
+                            nombres =  [str_match2]
+                            if(nombres != None):
+                                lista_de_id.append(nombres)
+
+                    
+
+                    for iden in range(len(lista_de_id)):
+                    #agregar la informacion a un listado
+                        keys_salida = x
+                        value_salida = lista_de_id[iden]
+                        diccionario_salida.update({keys_salida:(value_salida)})
+                        lista_salida.append(f"ID-{keys_salida} Nombre encontrado {value_salida} -> keyword {keywordparsed}")     
+
+
+            salida = jsonify({'Keyword': keyword, 'Lista': lista_salida})
+            return salida
+            
 
 api.add_resource(NLPVersionTwo, '/nlp/empresas')
 api.add_resource(NLPPersonasFisicas, '/nlp/personas')
