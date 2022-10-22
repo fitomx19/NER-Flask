@@ -299,7 +299,7 @@ class NLPPersonasFisicas(Resource):
 #----------------------------------------------------------------------------------------------------------------------------
 #----------------------------------------- Filtrar Nombres ------------------------------------------------------------------
 #----------------------------------------------------------------------------------------------------------------------------
-            keywordparsed = unidecode.unidecode(keyword).strip()
+            keywordparsed = unidecode.unidecode(keyword).strip().title()
             trySplitKeywordparsed = keywordparsed.split(' ')
 
             if(len(trySplitKeywordparsed) == 1):
@@ -401,7 +401,7 @@ class PersonasFisicasEndpoint(Resource):
             #Obtenemos la informacion necesaria
             request_json = request.get_json()   
             keyword = request_json.get('keyword')
-            keywordparsed = unidecode.unidecode(keyword).strip()
+            keywordparsed = unidecode.unidecode(keyword).strip().title()
             lista = request_json.get('listado')
             diccionario_consulta_db = {}         
             diccionario_salida = {}
@@ -421,12 +421,16 @@ class PersonasFisicasEndpoint(Resource):
                 unaccented_string2 = unidecode.unidecode(y)  
                 names = get_human_names(unaccented_string2)
                 namesapolo = metodoSpacyFisicas(keyword,unaccented_string2)
+                namesapolo2 = metodoSpacyFisicas(keyword,unaccented_string2.title())
                 listado_extra = []
                 for name in names: 
                     last_first =  HumanName(name).first + ' ' + HumanName(name).last
                     listado_extra.append(last_first)
                 for name in namesapolo: 
                     listado_extra.append(name)
+                for name2 in namesapolo2: 
+                    listado_extra.append(name2)
+
                 print(listado_extra)
 
                 #procesamos la keyword
@@ -493,6 +497,8 @@ class PersonasFisicasEndpoint(Resource):
                     posibilidad1 = valorA+ " " + valorB + " " + valorC
                     posibilidad2 = valorA+ " " + valorC + " " + valorB
                     posibilidad3 = valorC+ " " + valorA + " " + valorB
+                    posibilidad4 = valorA+ " " + valorB 
+                    posibilidad5 = valorB+ " " + valorC 
 
                     for test in listado_extra:                       
                         if search(posibilidad1, test):
@@ -508,6 +514,16 @@ class PersonasFisicasEndpoint(Resource):
                                 lista_de_id.append(nombres)
                         elif search(posibilidad3, test):
                             str_match2 = posibilidad3
+                            nombres =  [str_match2]
+                            if(nombres != None):
+                                lista_de_id.append(nombres)
+                        elif search(posibilidad4, test):
+                            str_match2 = posibilidad4
+                            nombres =  [str_match2]
+                            if(nombres != None):
+                                lista_de_id.append(nombres)
+                        elif search(posibilidad5, test):
+                            str_match2 = posibilidad5
                             nombres =  [str_match2]
                             if(nombres != None):
                                 lista_de_id.append(nombres)
